@@ -85,8 +85,10 @@ The tunnel reads the key and secret from the environment, so they never appear o
 
 ## CodePipeline: gate a deploy on TestingBot results
 
-1. Deploy the gate. From this repository, run `sam deploy --guided`. It asks for `TestingBotSecretArn`, the ARN of the
-   secret above.
+1. Deploy the gate from the
+   [AWS Serverless Application Repository](https://serverlessrepo.aws.amazon.com/applications/us-east-1/664425719481/testingbot-codepipeline-gate)
+   (choose **Deploy**, tick *I acknowledge that this app creates custom IAM roles*), or from this repository with
+   `sam deploy --guided`. Both ask for `TestingBotSecretArn`, the ARN of the secret above.
 2. In the CodeBuild action that runs your tests, set the **variable namespace** to `TestVariables` and keep
    `TESTINGBOT_BUILD` under `env.exported-variables` in the buildspec.
 3. Add an action after it: provider **AWS Lambda**, function `GateFunctionName` from the stack outputs, and user

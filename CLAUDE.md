@@ -52,6 +52,9 @@ Bump `__version__` in `src/testingbot_codepipeline/__init__.py` (and `SemanticVe
 a GitHub release tagged `v<version>`. `publish.yml` refuses a tag that does not match `__version__`, builds, and uploads
 to PyPI through trusted publishing (OIDC, environment `pypi`). No token is stored anywhere.
 
+The gate is public in the Serverless Application Repository (us-east-1, account 664425719481). Add a version with
+`SAR_BUCKET=testingbot-sar-artifacts ./scripts/publish-sar.sh` after bumping `SemanticVersion`.
+
 ## End-to-end test
 
 `e2e/run.sh` deploys the gate and a throwaway S3 → CodeBuild → gate pipeline into a real account and runs a passing and
