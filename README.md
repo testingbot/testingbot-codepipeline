@@ -1,5 +1,8 @@
 # TestingBot for AWS CodePipeline and CodeBuild
 
+[![test](https://github.com/testingbot/testingbot-codepipeline/actions/workflows/test.yml/badge.svg)](https://github.com/testingbot/testingbot-codepipeline/actions/workflows/test.yml)
+[![PyPI](https://img.shields.io/pypi/v/testingbot-codepipeline)](https://pypi.org/project/testingbot-codepipeline/)
+
 Run [TestingBot](https://testingbot.com) Selenium and Appium tests from AWS CodePipeline, see the results in CodeBuild
 test reports, and stop a deploy when TestingBot tests fail.
 

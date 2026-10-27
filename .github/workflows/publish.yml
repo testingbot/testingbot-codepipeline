@@ -1,0 +1,33 @@
+name: Publish to PyPI and attach build artifacts to the release
+
+on:
+  release:
+    types: [published]
+
+jobs:
+  pypi-publish:
+    name: Build, publish to PyPI, attach to release
+    runs-on: ubuntu-latest
+    environment:
+      name: pypi
+      url: https://pypi.org/p/testingbot-codepipeline
+    permissions:
+      id-token: write   # OIDC trusted publishing to PyPI
+      contents: write   # upload built artifacts to the GitHub release
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.x"
+      - run: python -m pip install --upgrade pip build
+      - name: Check the tag matches the package version
+        run: |
+          version=$(python -c "import sys; sys.path.insert(0, 'src'); import testingbot_codepipeline as p; print(p.__version__)")
+          test "v${version}" = "${{ github.event.release.tag_name }}" || { echo "tag ${{ github.event.release.tag_name }} != v${version}"; exit 1; }
+      - run: python -m build
+      - name: Publish package distributions to PyPI
+        uses: pypa/gh-action-pypi-publish@release/v1
+      - name: Attach distributions to the GitHub release
+        run: gh release upload "${{ github.event.release.tag_name }}" dist/*.whl dist/*.tar.gz --clobber
+        env:
+          GH_TOKEN: ${{ github.token }}

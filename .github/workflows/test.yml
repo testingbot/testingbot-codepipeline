@@ -7,10 +7,12 @@ on:
 
 jobs:
   test:
+    name: test (${{ matrix.os }}, python ${{ matrix.python }})
     runs-on: ${{ matrix.os }}
     strategy:
+      fail-fast: false
       matrix:
-        os: [ubuntu-latest, ubuntu-24.04-arm]
+        os: [ubuntu-latest, ubuntu-24.04-arm, macos-latest]
         python: ["3.9", "3.12", "3.13"]
     steps:
       - uses: actions/checkout@v4
@@ -20,3 +22,55 @@ jobs:
       - run: python -m unittest discover -s tests -v
         env:
           PYTHONPATH: src:tests
+
+  package:
+    # What PyPI will get: build the sdist and wheel, install the wheel into a
+    # clean venv and run the installed entry point.
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.x"
+      - run: python -m pip install --upgrade pip build twine
+      - run: python -m build
+      - run: python -m twine check --strict dist/*
+      - run: |
+          python -m venv /tmp/venv
+          /tmp/venv/bin/pip install dist/*.whl
+          /tmp/venv/bin/testingbot-codebuild --version
+          CODEBUILD_BUILD_NUMBER=1 CODEBUILD_BUILD_ID=ci:x /tmp/venv/bin/testingbot-codebuild env
+
+  template:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.x"
+      - run: python -m pip install cfn-lint
+      - run: cfn-lint template.yaml
+
+  tunnel:
+    # Downloads the real tunnel release and checks the archive layout and
+    # checksum that tunnel.install() depends on. No credentials needed.
+    runs-on: ${{ matrix.os }}
+    strategy:
+      matrix:
+        os: [ubuntu-latest, ubuntu-24.04-arm]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - run: |
+          python - <<'PY'
+          import subprocess
+          from testingbot_codepipeline import tunnel
+          binary = tunnel.install(install_dir="/tmp/tb")
+          out = subprocess.run([binary, "--version"], capture_output=True, text=True, timeout=120)
+          print(out.stdout, out.stderr)
+          assert tunnel.DEFAULT_VERSION in out.stdout, "unexpected --version output"
+          PY
+        env:
+          PYTHONPATH: src

@@ -45,3 +45,9 @@ docker run --rm -v "$PWD":/src:ro -w /src -e PYTHONPATH=/src/src:/src/tests pyth
   the tunnel tests is that intended detachment.
 * Release assets are `testingbot-tunnel-{linux,macos}-{x64,arm64}.tar.gz` plus `.sha256` on the GitHub release,
   containing `<name>/bin/testingbot-tunnel` with a bundled runtime. Bump `tunnel.DEFAULT_VERSION` with tunnel releases.
+
+## Releasing
+
+Bump `__version__` in `src/testingbot_codepipeline/__init__.py` (and `SemanticVersion` in `template.yaml`), then publish
+a GitHub release tagged `v<version>`. `publish.yml` refuses a tag that does not match `__version__`, builds, and uploads
+to PyPI through trusted publishing (OIDC, environment `pypi`). No token is stored anywhere.
