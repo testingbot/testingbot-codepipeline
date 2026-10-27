@@ -1,0 +1,93 @@
+AWSTemplateFormatVersion: "2010-09-09"
+Description: >
+  Throwaway end-to-end test for testingbot-codepipeline: S3 source -> CodeBuild
+  (pip-installed testingbot-codebuild, tunnel to a server inside the build,
+  Selenium test on TestingBot, JUnit report) -> TestingBot gate Lambda.
+
+Parameters:
+  SecretArn: { Type: String }
+  GateFunctionName: { Type: String }
+  GateFunctionArn: { Type: String }
+
+Resources:
+  ArtifactBucket:
+    Type: AWS::S3::Bucket
+    Properties:
+      VersioningConfiguration: { Status: Enabled }
+      PublicAccessBlockConfiguration:
+        { BlockPublicAcls: true, IgnorePublicAcls: true, BlockPublicPolicy: true, RestrictPublicBuckets: true }
+
+  BuildRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Statement: [{ Effect: Allow, Principal: { Service: codebuild.amazonaws.com }, Action: sts:AssumeRole }]
+      Policies:
+        - PolicyName: build
+          PolicyDocument:
+            Statement:
+              - { Effect: Allow, Action: [logs:CreateLogGroup, logs:CreateLogStream, logs:PutLogEvents], Resource: "*" }
+              - { Effect: Allow, Action: [s3:GetObject, s3:GetObjectVersion, s3:PutObject], Resource: !Sub "${ArtifactBucket.Arn}/*" }
+              - { Effect: Allow, Action: secretsmanager:GetSecretValue, Resource: !Ref SecretArn }
+              - Effect: Allow
+                Action: [codebuild:CreateReportGroup, codebuild:CreateReport, codebuild:UpdateReport, codebuild:BatchPutTestCases]
+                Resource: !Sub "arn:aws:codebuild:${AWS::Region}:${AWS::AccountId}:report-group/${AWS::StackName}-*"
+
+  E2EProject:
+    Type: AWS::CodeBuild::Project
+    Properties:
+      Name: !Sub "${AWS::StackName}"
+      ServiceRole: !GetAtt BuildRole.Arn
+      Source: { Type: CODEPIPELINE }
+      Artifacts: { Type: CODEPIPELINE }
+      Environment:
+        Type: LINUX_CONTAINER
+        ComputeType: BUILD_GENERAL1_SMALL
+        Image: aws/codebuild/amazonlinux-x86_64-standard:5.0
+      TimeoutInMinutes: 20
+
+  PipelineRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Statement: [{ Effect: Allow, Principal: { Service: codepipeline.amazonaws.com }, Action: sts:AssumeRole }]
+      Policies:
+        - PolicyName: pipeline
+          PolicyDocument:
+            Statement:
+              - { Effect: Allow, Action: [s3:GetObject, s3:GetObjectVersion, s3:GetBucketVersioning, s3:PutObject], Resource: [!GetAtt ArtifactBucket.Arn, !Sub "${ArtifactBucket.Arn}/*"] }
+              - { Effect: Allow, Action: [codebuild:StartBuild, codebuild:BatchGetBuilds], Resource: !GetAtt E2EProject.Arn }
+              - { Effect: Allow, Action: lambda:InvokeFunction, Resource: !Ref GateFunctionArn }
+
+  Pipeline:
+    Type: AWS::CodePipeline::Pipeline
+    Properties:
+      Name: !Sub "${AWS::StackName}"
+      PipelineType: V2
+      RoleArn: !GetAtt PipelineRole.Arn
+      ArtifactStore: { Type: S3, Location: !Ref ArtifactBucket }
+      Stages:
+        - Name: Source
+          Actions:
+            - Name: Source
+              ActionTypeId: { Category: Source, Owner: AWS, Provider: S3, Version: "1" }
+              Configuration: { S3Bucket: !Ref ArtifactBucket, S3ObjectKey: source.zip, PollForSourceChanges: false }
+              OutputArtifacts: [{ Name: SourceOutput }]
+        - Name: Test
+          Actions:
+            - Name: E2E
+              Namespace: TestVariables
+              ActionTypeId: { Category: Build, Owner: AWS, Provider: CodeBuild, Version: "1" }
+              Configuration: { ProjectName: !Ref E2EProject }
+              InputArtifacts: [{ Name: SourceOutput }]
+              RunOrder: 1
+            - Name: TestingBot
+              ActionTypeId: { Category: Invoke, Owner: AWS, Provider: Lambda, Version: "1" }
+              Configuration:
+                FunctionName: !Ref GateFunctionName
+                UserParameters: '{"build": "#{TestVariables.TESTINGBOT_BUILD}"}'
+              RunOrder: 2
+
+Outputs:
+  Bucket: { Value: !Ref ArtifactBucket }
+  Pipeline: { Value: !Ref Pipeline }

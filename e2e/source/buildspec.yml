@@ -1,0 +1,36 @@
+version: 0.2
+
+env:
+  secrets-manager:
+    TESTINGBOT_KEY: testingbot-codepipeline-e2e:key
+    TESTINGBOT_SECRET: testingbot-codepipeline-e2e:secret
+  exported-variables:
+    - TESTINGBOT_BUILD
+
+phases:
+  install:
+    commands:
+      - if [ -d pkg ]; then pip install --quiet ./pkg; else pip install --quiet testingbot-codepipeline; fi
+      - pip install --quiet selenium
+  pre_build:
+    commands:
+      - eval "$(testingbot-codebuild env)"
+      - echo "TestingBot build $TESTINGBOT_BUILD"
+      - testingbot-codebuild tunnel start
+  build:
+    commands:
+      # A page only reachable from inside the build: proves the tunnel.
+      - mkdir -p site && printf '<title>tb-e2e-%s</title>ok' "$CODEBUILD_BUILD_NUMBER" > site/index.html
+      - (cd site && python3 -m http.server 8080 >/dev/null 2>&1 &)
+      - python3 test_e2e.py
+  post_build:
+    commands:
+      - tail -n 40 /tmp/testingbot-tunnel.log || true
+      - testingbot-codebuild tunnel stop
+      - testingbot-codebuild report
+
+reports:
+  testingbot:
+    files:
+      - testingbot-reports/testingbot.xml
+    file-format: JUNITXML

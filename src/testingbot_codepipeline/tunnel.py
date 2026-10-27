@@ -170,6 +170,18 @@ def _forget(state_file):
         pass
 
 
+def _zombie(pid):
+    # `tunnel stop` runs in a later buildspec command than `tunnel start`, so
+    # the tunnel is not our child and cannot be reaped here. In a CodeBuild
+    # container nothing else reaps it either, and a zombie still answers
+    # signal 0: without this check every stop waited out the full grace period.
+    try:
+        with open(f"/proc/{pid}/stat") as f:
+            return f.read().rsplit(")", 1)[1].split()[0] == "Z"
+    except (OSError, IndexError):
+        return False
+
+
 def _alive(pid):
     try:
         os.kill(pid, 0)
@@ -177,12 +189,14 @@ def _alive(pid):
         return False
     except PermissionError:
         return True
-    # A zombie still answers signal 0; reap it when it is our own child.
+    # Reap it when it is our own child (start() timing out).
     try:
         done, _ = os.waitpid(pid, os.WNOHANG)
-        return done == 0
+        if done:
+            return False
     except ChildProcessError:
-        return True
+        pass
+    return not _zombie(pid)
 
 
 def _terminate(pid, grace=30):

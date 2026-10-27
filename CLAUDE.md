@@ -51,3 +51,10 @@ docker run --rm -v "$PWD":/src:ro -w /src -e PYTHONPATH=/src/src:/src/tests pyth
 Bump `__version__` in `src/testingbot_codepipeline/__init__.py` (and `SemanticVersion` in `template.yaml`), then publish
 a GitHub release tagged `v<version>`. `publish.yml` refuses a tag that does not match `__version__`, builds, and uploads
 to PyPI through trusted publishing (OIDC, environment `pypi`). No token is stored anywhere.
+
+## End-to-end test
+
+`e2e/run.sh` deploys the gate and a throwaway S3 → CodeBuild → gate pipeline into a real account and runs a passing and
+a deliberately failing case (Chrome on TestingBot, through the tunnel, against a page served inside the build). It ships
+this checkout's package in the source zip; `PYPI=1` tests the published release instead. `./e2e/run.sh teardown`
+removes both stacks. Needs the secret `testingbot-codepipeline-e2e` and `SAM_BUCKET`. Last green run: 2026-10-27.

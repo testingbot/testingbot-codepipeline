@@ -15,7 +15,7 @@ Metadata:
     Labels: [testingbot, codepipeline, selenium, appium, testing]
     HomePageUrl: https://testingbot.com/support/integrations/ci-cd/aws-codepipeline
     SourceCodeUrl: https://github.com/testingbot/testingbot-codepipeline
-    SemanticVersion: 0.1.0
+    SemanticVersion: 0.1.1
 
 Parameters:
   TestingBotSecretArn:

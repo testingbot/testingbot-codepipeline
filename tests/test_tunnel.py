@@ -118,6 +118,25 @@ class TunnelTest(unittest.TestCase):
         self.assertFalse(os.path.exists(self.state))
 
 
+@unittest.skipUnless(os.path.exists("/proc/self/stat"), "zombie detection reads /proc")
+class ZombieTest(unittest.TestCase):
+    def test_a_zombie_that_is_not_our_child_counts_as_dead(self):
+        # The parent forks a child that exits at once and never reaps it, like
+        # the tunnel after `tunnel start` returned in an earlier CodeBuild command.
+        import subprocess
+        parent = subprocess.Popen([sys.executable, "-c",
+                                   "import os, sys, time\n"
+                                   "pid = os.fork()\n"
+                                   "if pid == 0: os._exit(0)\n"
+                                   "print(pid, flush=True); time.sleep(30)"], stdout=subprocess.PIPE, text=True)
+        self.addCleanup(parent.wait)
+        self.addCleanup(parent.kill)
+        zombie = int(parent.stdout.readline())
+        time.sleep(0.3)
+        self.assertFalse(tunnel._alive(zombie))
+        self.assertTrue(tunnel._alive(parent.pid))
+
+
 class InstallTest(unittest.TestCase):
     def setUp(self):
         self.tmp = tempfile.mkdtemp()

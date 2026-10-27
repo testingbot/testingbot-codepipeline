@@ -4,3 +4,5 @@ build/
 dist/
 .aws-sam/
 testingbot-reports/
+e2e/.aws-sam/
+e2e/source.zip
