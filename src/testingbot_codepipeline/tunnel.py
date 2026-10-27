@@ -100,9 +100,15 @@ def install(version=DEFAULT_VERSION, install_dir=None, release_url=RELEASE_URL, 
     return binary
 
 
+# The probe is always local. Without an explicit empty ProxyHandler, urllib
+# sends it to HTTP_PROXY (set on many VPC CodeBuild projects) or to the macOS
+# system proxy, and the tunnel never looks ready.
+_local = urllib.request.build_opener(urllib.request.ProxyHandler({}))
+
+
 def _ready(port):
     try:
-        with urllib.request.urlopen(f"http://127.0.0.1:{port}/readyz", timeout=2) as resp:
+        with _local.open(f"http://127.0.0.1:{port}/readyz", timeout=2) as resp:
             return resp.status == 200
     except (urllib.error.URLError, OSError):
         return False

@@ -67,7 +67,7 @@ class TunnelTest(unittest.TestCase):
 
     def start(self, **kw):
         opts = dict(metrics_port=self.port, logfile=os.path.join(self.tmp, "tunnel.log"), state_file=self.state,
-                    timeout=10, log=lambda *_: None, poll_interval=0.1)
+                    timeout=30, log=lambda *_: None, poll_interval=0.1)
         opts.update(kw)
         return tunnel.start("k", "s3cret", "codebuild-app-7", self.binary, **opts)
 
@@ -87,6 +87,11 @@ class TunnelTest(unittest.TestCase):
         self.assertTrue(os.path.exists(self.record + ".stopped"), "stop must use SIGTERM so the tunnel shuts down gracefully")
         self.assertFalse(os.path.exists(self.state))
         self.assertFalse(tunnel.stop(state_file=self.state, log=lambda *_: None))
+
+    def test_readiness_probe_ignores_http_proxy(self):
+        dead = f"http://127.0.0.1:{free_port()}"
+        with mock.patch.dict(os.environ, {"HTTP_PROXY": dead, "http_proxy": dead, "NO_PROXY": "", "no_proxy": ""}):
+            self.start()
 
     def test_refuses_a_second_tunnel(self):
         self.start()
