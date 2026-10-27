@@ -1,0 +1,30 @@
+[build-system]
+requires = ["setuptools>=64"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "testingbot-codepipeline"
+dynamic = ["version"]
+description = "TestingBot for AWS CodeBuild and CodePipeline: tunnel, JUnit test reports and a deploy gate."
+readme = "README.md"
+license = { text = "MIT" }
+requires-python = ">=3.9"
+dependencies = []
+classifiers = [
+  "Programming Language :: Python :: 3",
+  "License :: OSI Approved :: MIT License",
+  "Topic :: Software Development :: Testing",
+]
+
+[project.urls]
+Homepage = "https://testingbot.com/support/integrations/ci-cd/aws-codepipeline"
+Source = "https://github.com/testingbot/testingbot-codepipeline"
+
+[project.scripts]
+testingbot-codebuild = "testingbot_codepipeline.cli:main"
+
+[tool.setuptools.dynamic]
+version = { attr = "testingbot_codepipeline.__version__" }
+
+[tool.setuptools.packages.find]
+where = ["src"]

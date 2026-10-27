@@ -1,0 +1,49 @@
+# buildspec.yml for a CodeBuild project that runs Selenium/Appium tests on
+# TestingBot, against a site that is only reachable from inside the build.
+version: 0.2
+
+env:
+  secrets-manager:
+    # A Secrets Manager secret named "testingbot": {"key": "...", "secret": "..."}
+    TESTINGBOT_KEY: testingbot:key
+    TESTINGBOT_SECRET: testingbot:secret
+  # Hands the build name to the next pipeline action (the gate), as
+  # #{TestVariables.TESTINGBOT_BUILD} when this action's namespace is TestVariables.
+  exported-variables:
+    - TESTINGBOT_BUILD
+
+phases:
+  install:
+    runtime-versions:
+      nodejs: 20
+    commands:
+      - pip install --quiet testingbot-codepipeline
+      - npm ci
+  pre_build:
+    commands:
+      # Sets TESTINGBOT_BUILD and TESTINGBOT_TUNNEL_IDENTIFIER
+      # (codebuild-<project>-<build number>). Pass both to your tests as the
+      # "build" and "tunnel-identifier" capabilities.
+      - eval "$(testingbot-codebuild env)"
+      # Downloads the self-contained tunnel (no Java needed) and blocks until
+      # it is forwarding.
+      - testingbot-codebuild tunnel start
+  build:
+    commands:
+      - npm run start:staging &
+      - npm run test:e2e
+  post_build:
+    # post_build runs when the tests fail too.
+    commands:
+      - testingbot-codebuild tunnel stop
+      - testingbot-codebuild report --output testingbot-reports/testingbot.xml
+
+reports:
+  testingbot:
+    files:
+      - testingbot-reports/testingbot.xml
+    file-format: JUNITXML
+
+cache:
+  paths:
+    - /root/.testingbot-tunnel/**/*

@@ -1,0 +1,38 @@
+# The relevant part of an AWS::CodePipeline::Pipeline (CloudFormation): a test
+# stage running the buildspec above, then the TestingBot gate before deploy.
+# Deploy the gate first: see template.yaml, or the Serverless Application
+# Repository app "testingbot-codepipeline-gate".
+  Pipeline:
+    Type: AWS::CodePipeline::Pipeline
+    Properties:
+      PipelineType: V2
+      RoleArn: !GetAtt PipelineRole.Arn
+      ArtifactStore: { Type: S3, Location: !Ref ArtifactBucket }
+      Stages:
+        - Name: Source
+          Actions: [ ... ]
+        - Name: Test
+          Actions:
+            - Name: E2E
+              # Exposes the buildspec's exported-variables as #{TestVariables.*}
+              Namespace: TestVariables
+              ActionTypeId: { Category: Build, Owner: AWS, Provider: CodeBuild, Version: "1" }
+              Configuration:
+                ProjectName: !Ref E2EProject
+              InputArtifacts: [{ Name: SourceOutput }]
+              RunOrder: 1
+            - Name: TestingBot
+              ActionTypeId: { Category: Invoke, Owner: AWS, Provider: Lambda, Version: "1" }
+              Configuration:
+                FunctionName: !GetAtt TestingBotGate.Outputs.GateFunctionName
+                # Optional: "max_failed": 0, "allow_unknown": true,
+                #           "allow_empty": false, "max_wait": 300
+                UserParameters: '{"build": "#{TestVariables.TESTINGBOT_BUILD}"}'
+              RunOrder: 2
+        - Name: Deploy
+          Actions: [ ... ]
+
+  # The pipeline role must be allowed to invoke the gate:
+  #   - Effect: Allow
+  #     Action: lambda:InvokeFunction
+  #     Resource: !GetAtt TestingBotGate.Outputs.GateFunctionArn

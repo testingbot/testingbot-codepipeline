@@ -1,0 +1,65 @@
+AWSTemplateFormatVersion: "2010-09-09"
+Transform: AWS::Serverless-2016-10-31
+Description: >
+  TestingBot CodePipeline gate. A Lambda for a CodePipeline "Invoke" action that
+  passes or fails the pipeline on the result of a TestingBot build.
+
+Metadata:
+  AWS::ServerlessRepo::Application:
+    Name: testingbot-codepipeline-gate
+    Description: Gate a CodePipeline stage on the result of a TestingBot Selenium/Appium build.
+    Author: TestingBot
+    SpdxLicenseId: MIT
+    LicenseUrl: LICENSE
+    ReadmeUrl: README.md
+    Labels: [testingbot, codepipeline, selenium, appium, testing]
+    HomePageUrl: https://testingbot.com/support/integrations/ci-cd/aws-codepipeline
+    SourceCodeUrl: https://github.com/testingbot/testingbot-codepipeline
+    SemanticVersion: 0.1.0
+
+Parameters:
+  TestingBotSecretArn:
+    Type: String
+    Description: >
+      ARN of a Secrets Manager secret whose SecretString is
+      {"key": "<TestingBot key>", "secret": "<TestingBot secret>"}.
+    AllowedPattern: "arn:aws[a-z-]*:secretsmanager:.+"
+
+Resources:
+  GateFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      CodeUri: src/
+      Handler: testingbot_codepipeline.gate.handler
+      Runtime: python3.12
+      Architectures: [arm64]
+      MemorySize: 128
+      # Long enough for the API calls plus the continuation pause, short of
+      # anything that would hide a hang.
+      Timeout: 60
+      Environment:
+        Variables:
+          TESTINGBOT_SECRET_ARN: !Ref TestingBotSecretArn
+      Policies:
+        - AWSSecretsManagerGetSecretValuePolicy:
+            SecretArn: !Ref TestingBotSecretArn
+        - Statement:
+            - Effect: Allow
+              # These two actions do not support resource-level permissions.
+              Action:
+                - codepipeline:PutJobSuccessResult
+                - codepipeline:PutJobFailureResult
+              Resource: "*"
+
+  GateLogGroup:
+    Type: AWS::Logs::LogGroup
+    Properties:
+      LogGroupName: !Sub /aws/lambda/${GateFunction}
+      RetentionInDays: 30
+
+Outputs:
+  GateFunctionName:
+    Description: Use this as FunctionName in the CodePipeline Invoke action.
+    Value: !Ref GateFunction
+  GateFunctionArn:
+    Value: !GetAtt GateFunction.Arn
