@@ -7,6 +7,7 @@ unset, and state is START until the WebDriver session ends."""
 
 import base64
 import json
+import socketserver
 import threading
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from urllib.parse import parse_qs, unquote, urlparse
@@ -25,6 +26,14 @@ def fixture():
         {"id": 103, "name": "flaky spec", "success": False, "unknown": True, "state": "COMPLETE", "duration": 5,
          "browser": "Firefox 131", "browser_version": "131", "os": "WIN11", "status_message": None, "video": False},
     ]
+
+
+class _Server(ThreadingHTTPServer):
+    # Skips the socket.getfqdn() in HTTPServer.server_bind, which takes ~30s
+    # on the macOS CI runners.
+    def server_bind(self):
+        socketserver.TCPServer.server_bind(self)
+        self.server_name, self.server_port = self.server_address[:2]
 
 
 class Stub:
@@ -62,7 +71,7 @@ class Stub:
             def log_message(self, *a):
                 pass
 
-        self.server = ThreadingHTTPServer(("127.0.0.1", 0), Handler)
+        self.server = _Server(("127.0.0.1", 0), Handler)
         self.url = f"http://127.0.0.1:{self.server.server_address[1]}/v1"
         threading.Thread(target=self.server.serve_forever, daemon=True).start()
 

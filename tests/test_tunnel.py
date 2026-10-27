@@ -18,7 +18,7 @@ from unittest import mock
 from testingbot_codepipeline import tunnel
 
 FAKE_TUNNEL = r'''#!{python}
-import json, os, signal, sys, time
+import json, os, signal, socketserver, sys, time
 from http.server import BaseHTTPRequestHandler, HTTPServer
 args = sys.argv[1:]
 port = int(args[args.index("--metrics-port") + 1])
@@ -40,7 +40,13 @@ class H(BaseHTTPRequestHandler):
     def do_GET(self):
         self.send_response(200 if self.path == "/readyz" else 404); self.end_headers()
     def log_message(self, *a): pass
-HTTPServer(("127.0.0.1", port), H).serve_forever()
+class S(HTTPServer):
+    # HTTPServer.server_bind resolves socket.getfqdn(), which takes ~30s on
+    # the macOS CI runners while the port already accepts connections.
+    def server_bind(self):
+        socketserver.TCPServer.server_bind(self)
+        self.server_name, self.server_port = self.server_address[:2]
+S(("127.0.0.1", port), H).serve_forever()
 '''
 
 
